@@ -13,18 +13,33 @@ class MapViewController: UIViewController {
 
     @IBOutlet weak var userView: MKMapView!
     
+    let searchController = UISearchController(searchResultsController: nil)
+    
     let locationManager = CLLocationManager()
-    let meter: Double = 5000
+    let meter: Double = 50000
     
     override func viewDidLoad() {
         super.viewDidLoad()
         checkLocationService()
+        setupSearch()
     }
     
     func setup() {
+        
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
     }
+    func setupSearch(){
+        
+        searchController.searchBar.delegate = self
+        searchController.searchBar.sizeToFit()
+        searchController.searchBar.placeholder = "Search places"
+        navigationItem.searchController = searchController
+        searchController.hidesNavigationBarDuringPresentation = false
+        searchController.dimsBackgroundDuringPresentation = true
+        definesPresentationContext = true
+    }
+    
     
     func centerView() {
         if let locat = locationManager.location?.coordinate{
@@ -32,10 +47,12 @@ class MapViewController: UIViewController {
             userView.setRegion(region, animated: true)
         }
     }
+    
     func checkLocationService () {
         if CLLocationManager.locationServicesEnabled(){
             setup()
             checkAuthorization()
+            
         } else {
             
         }
@@ -49,24 +66,44 @@ class MapViewController: UIViewController {
             userView.showsUserLocation = true
             centerView()
             locationManager.startUpdatingLocation()
-        case .denied:
-            break
-            
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
-        case .restricted:
-            break
-            
-        case .authorizedAlways:
-            break
-            
-        @unknown default:
+        default:
             break
         }
         
     }
+    func searchMap() {
         
+        guard let searchBarText = searchController.searchBar.text else { return }
+        let request = MKLocalSearch.Request()
+        print(searchBarText)
+        request.naturalLanguageQuery = searchBarText
+        if let locat = locationManager.location?.coordinate{
+            request.region = MKCoordinateRegion(center: locat, latitudinalMeters: meter, longitudinalMeters: meter) }
+        
+        let search = MKLocalSearch(request: request)
+        search.start(completionHandler: {(response, error) in
+            
+            for item in response!.mapItems {
+                self.addPinToMapView(title: item.name, latitude: item.placemark.location!.coordinate.latitude, longitude: item.placemark.location!.coordinate.longitude)
+            }
+        })
     }
+    
+    func addPinToMapView(title: String?, latitude: CLLocationDegrees, longitude: CLLocationDegrees) {
+        if let title = title {
+            let location = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            let annotation = MKPointAnnotation()
+            
+            annotation.coordinate = location
+            annotation.title = title
+            
+            userView.addAnnotation(annotation)
+        }
+    }
+    
+}
 
 
 
@@ -81,5 +118,15 @@ extension MapViewController: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         checkAuthorization()
     }
+    
+}
+
+extension MapViewController: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        userView.removeAnnotations(userView.annotations)
+        searchMap()
+    }
+    
     
 }
